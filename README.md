@@ -23,12 +23,16 @@ Two independent tracks that mirror the two things fleet operations actually need
 
 ## Results
 
-- **Failure model:** RandomForest on imbalanced data (~3.4% failures) — **PR-AUC 0.846**,
-  **failure recall 0.79**, precision 0.90 (evaluated on a held-out test set; accuracy is
-  deliberately *not* the headline metric for such imbalanced data).
-- **Feature engineering paid off:** an engineered physics feature (mechanical power) ranks
-  in the model's top features, and a temperature-difference feature outperforms the raw
-  temperatures.
+- **Failure model: LightGBM** on imbalanced data (~3.4% failures) — **PR-AUC 0.879**,
+  **failure recall 0.82** (catches 56 of 68 failures), precision 0.85 (held-out test set;
+  accuracy is deliberately *not* the headline metric for such imbalanced data).
+- **Model selection, not assumption:** screened ~25 models with LazyPredict, then ran an
+  imbalance-aware shootout (RandomForest vs XGBoost vs LightGBM vs GradientBoosting) ranked
+  on PR-AUC — **LightGBM won**, beating the obvious RandomForest choice.
+- **Feature engineering paid off:** an engineered physics feature (mechanical power) and a
+  temperature-difference feature both rank among the model's top signals.
+- **Tracked with MLflow:** every run logs params/metrics/figures, and the best model is
+  registered in the MLflow Model Registry.
 
 ## Architecture (batch pipeline)
 
@@ -47,8 +51,8 @@ Dashboard + automated report  •  monitoring       ← MLOps
 
 ## Tech stack
 
-Python · PostgreSQL (Docker) · SQLAlchemy · pandas · scikit-learn · MLflow ·
-Streamlit · Evidently · Docker · GitHub Actions
+Python · PostgreSQL (Docker) · SQLAlchemy · pandas · scikit-learn · LightGBM · XGBoost ·
+MLflow · Streamlit · Evidently · Docker · GitHub Actions
 
 ## Data sources
 
@@ -68,7 +72,7 @@ src/
   ingestion/    load raw data + data-quality checks   (M2)
   features/     cleaning + feature engineering          (M3)
   scorecard/    rules-based crew + vessel scorecards     (M4)
-  ml/           train + evaluate the failure model       (M5)
+  ml/           model benchmark + shootout, train/evaluate (M5-M6)
   serving/      dashboard + API                           (M8)
   monitoring/   data-quality & drift checks              (M9)
 pipelines/      orchestration (scheduled runs)           (M7)
@@ -82,8 +86,8 @@ docker/         docker-compose for local Postgres
 - [x] **M2** Ingestion into Postgres + data-quality checks
 - [x] **M3** Cleaning + feature engineering
 - [x] **M4** Rules-based scorecard (crew + vessel grades)
-- [x] **M5** Failure-prediction model (honest metrics)
-- [ ] **M6** MLflow experiment tracking + model registry
+- [x] **M5** Failure-prediction model (LightGBM, selected via benchmark + shootout)
+- [x] **M6** MLflow experiment tracking + model registry
 - [ ] **M7** Orchestration (scheduled pipeline)
 - [ ] **M8** Serving: dashboard + automated report
 - [ ] **M9** Monitoring: data-quality + drift

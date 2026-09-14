@@ -1,36 +1,44 @@
 """
-Milestone 5 — train + evaluate the equipment-failure predictor.
+Milestone 5 + 6 — train/evaluate the failure predictor, tracked with MLflow.
 
-Pipeline of good practice (each step is here to avoid a specific mistake):
-  1. Read ai4i_features from Postgres.
-  2. **Stratified** train/test split — keeps the same ~3.4% failure rate in both parts.
-  3. A scikit-learn **Pipeline** so all preprocessing is fit on TRAIN only, then applied
-     to TEST -> no data leakage.
-  4. **RandomForest(class_weight='balanced')** — tree model (robust to outliers, no scaling
-     needed) that up-weights the rare failures instead of ignoring them.
-  5. Judge with **precision / recall / PR-AUC**, and compare against a naive baseline that
-     always predicts "no failure" — to prove why accuracy is the wrong metric here.
+Model choice: **LightGBM**, selected after a LazyPredict screen (src/ml/benchmark_models.py)
+and a proper imbalance-aware shootout (src/ml/model_shootout.py) where it beat
+RandomForest, XGBoost, and the rest on PR-AUC.
+
+M5 (modeling):
+  - stratified train/test split (keeps the ~3.4% failure rate in both halves)
+  - leakage-safe Pipeline (preprocessing fit on TRAIN only)
+  - LightGBM(class_weight='balanced') for the rare class
+  - judged with precision / recall / PR-AUC (never accuracy alone)
+
+M6 (MLOps):
+  - every run is logged to MLflow: parameters, metrics, figures, and the model
+  - the model is registered in the MLflow Model Registry as a new version.
 
 Run from the project root:
     python -m src.ml.train_model
+View the runs:
+    mlflow ui --backend-store-uri sqlite:///mlflow.db     # then open http://localhost:5000
 """
 from pathlib import Path
 
 import joblib
 import matplotlib
-matplotlib.use("Agg")  # headless: save figures, don't open windows
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
+import mlflow
+import mlflow.sklearn
+import pandas as pd
+from lightgbm import LGBMClassifier
 from sklearn.compose import ColumnTransformer
 from sklearn.dummy import DummyClassifier
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (ConfusionMatrixDisplay, PrecisionRecallDisplay,
-                             average_precision_score, classification_report,
-                             confusion_matrix, roc_auc_score)
+                             accuracy_score, average_precision_score,
+                             confusion_matrix, f1_score, precision_score,
+                             recall_score, roc_auc_score)
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
-import pandas as pd
 
 from src.db import get_engine
 
@@ -39,94 +47,99 @@ MODELS = ROOT / "models"
 FIG = ROOT / "reports" / "figures"
 TARGET = "machine_failure"
 
+# --- hyper-parameters (logged to MLflow so runs are comparable) -------------
+PARAMS = dict(model="LightGBM", n_estimators=300, class_weight="balanced",
+              test_size=0.2, random_state=42)
+
 
 def main() -> None:
     MODELS.mkdir(exist_ok=True)
     FIG.mkdir(parents=True, exist_ok=True)
 
+    mlflow.set_tracking_uri("sqlite:///mlflow.db")
+    mlflow.set_experiment("failure-prediction")
+
     df = pd.read_sql("SELECT * FROM ai4i_features", get_engine())
     y = df[TARGET]
     X = df.drop(columns=[TARGET])
     categorical = ["type"]
-    numeric = [c for c in X.columns if c not in categorical]
 
-    # 2) stratified split (preserve the rare-failure ratio in both halves)
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, stratify=y, random_state=42)
-    print(f"train: {len(X_train)} rows ({y_train.mean()*100:.2f}% failures)")
-    print(f"test : {len(X_test)} rows ({y_test.mean()*100:.2f}% failures)")
+        X, y, test_size=PARAMS["test_size"], stratify=y,
+        random_state=PARAMS["random_state"])
 
-    # 3) leakage-safe pipeline: one-hot the category, pass numerics through
     preprocess = ColumnTransformer(
         [("type", OneHotEncoder(handle_unknown="ignore"), categorical)],
         remainder="passthrough")
-
-    # 4) tree model that up-weights the rare class
     model = Pipeline([
         ("preprocess", preprocess),
-        ("rf", RandomForestClassifier(
-            n_estimators=300, class_weight="balanced",
-            random_state=42, n_jobs=-1)),
+        ("clf", LGBMClassifier(
+            n_estimators=PARAMS["n_estimators"], class_weight=PARAMS["class_weight"],
+            random_state=PARAMS["random_state"], n_jobs=-1, verbose=-1)),
     ])
-    model.fit(X_train, y_train)
 
-    y_pred = model.predict(X_test)
-    y_proba = model.predict_proba(X_test)[:, 1]
+    with mlflow.start_run() as run:
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        y_proba = model.predict_proba(X_test)[:, 1]
 
-    # 5a) naive baseline: always predict the majority class ("no failure")
-    dummy = DummyClassifier(strategy="most_frequent").fit(X_train, y_train)
-    dummy_pred = dummy.predict(X_test)
+        dummy = DummyClassifier(strategy="most_frequent").fit(X_train, y_train)
+        dummy_acc = accuracy_score(y_test, dummy.predict(X_test))
 
-    # ---- report -----------------------------------------------------------
-    print("\n" + "=" * 60)
-    print("NAIVE BASELINE (always predicts 'no failure')")
-    print("=" * 60)
-    print(f"accuracy: {(dummy_pred == y_test).mean()*100:.2f}%   "
-          f"<-- looks great, but it catches 0 of the failures")
+        metrics = dict(
+            test_accuracy=accuracy_score(y_test, y_pred),
+            failure_precision=precision_score(y_test, y_pred, pos_label=1),
+            failure_recall=recall_score(y_test, y_pred, pos_label=1),
+            failure_f1=f1_score(y_test, y_pred, pos_label=1),
+            pr_auc=average_precision_score(y_test, y_proba),
+            roc_auc=roc_auc_score(y_test, y_proba),
+            baseline_accuracy=dummy_acc,
+        )
+        cm = confusion_matrix(y_test, y_pred)
 
-    print("\n" + "=" * 60)
-    print("OUR MODEL (RandomForest, balanced)")
-    print("=" * 60)
-    print(f"accuracy: {(y_pred == y_test).mean()*100:.2f}%")
-    print("\nclassification report (class 1 = failure is what matters):")
-    print(classification_report(y_test, y_pred, digits=3,
-                                target_names=["no failure", "failure"]))
-    print(f"PR-AUC (average precision): {average_precision_score(y_test, y_proba):.3f}")
-    print(f"ROC-AUC                   : {roc_auc_score(y_test, y_proba):.3f}")
-    print("\nconfusion matrix [rows=actual, cols=predicted]:")
-    cm = confusion_matrix(y_test, y_pred)
-    print(f"                 pred_no   pred_fail")
-    print(f"  actual_no      {cm[0,0]:>7}   {cm[0,1]:>9}")
-    print(f"  actual_fail    {cm[1,0]:>7}   {cm[1,1]:>9}   <- caught {cm[1,1]} of {cm[1].sum()} real failures")
+        mlflow.log_params(PARAMS)
+        mlflow.log_param("n_features", X.shape[1])
+        mlflow.log_metrics(metrics)
+        mlflow.log_metric("failures_caught", int(cm[1, 1]))
+        mlflow.log_metric("failures_total", int(cm[1].sum()))
 
-    # ---- figures ----------------------------------------------------------
-    fig, ax = plt.subplots(1, 2, figsize=(12, 5))
-    ConfusionMatrixDisplay.from_predictions(
-        y_test, y_pred, ax=ax[0], colorbar=False,
-        display_labels=["no failure", "failure"])
-    ax[0].set_title("Confusion matrix — our model")
-    ap = average_precision_score(y_test, y_proba)
-    PrecisionRecallDisplay.from_predictions(y_test, y_proba, ax=ax[1])
-    ax[1].set_title(f"Precision-Recall curve (PR-AUC = {ap:.3f})")
-    plt.tight_layout()
-    plt.savefig(FIG / "ml_evaluation.png", bbox_inches="tight")
+        fig, ax = plt.subplots(1, 2, figsize=(12, 5))
+        ConfusionMatrixDisplay.from_predictions(
+            y_test, y_pred, ax=ax[0], colorbar=False,
+            display_labels=["no failure", "failure"])
+        ax[0].set_title("Confusion matrix — LightGBM")
+        PrecisionRecallDisplay.from_predictions(y_test, y_proba, ax=ax[1])
+        ax[1].set_title(f"Precision-Recall (PR-AUC = {metrics['pr_auc']:.3f})")
+        plt.tight_layout(); plt.savefig(FIG / "ml_evaluation.png", bbox_inches="tight")
 
-    # ---- feature importances ---------------------------------------------
-    feat_names = model.named_steps["preprocess"].get_feature_names_out()
-    importances = pd.Series(
-        model.named_steps["rf"].feature_importances_, index=feat_names
-    ).sort_values(ascending=False)
-    print("\ntop feature importances:")
-    print(importances.head(8).round(3).to_string())
-    fig2, ax2 = plt.subplots(figsize=(8, 5))
-    importances.head(10)[::-1].plot.barh(ax=ax2, color="#4c72b0")
-    ax2.set_title("What the model relies on (feature importance)")
-    plt.tight_layout()
-    plt.savefig(FIG / "ml_feature_importance.png", bbox_inches="tight")
+        importances = pd.Series(
+            model.named_steps["clf"].feature_importances_,
+            index=model.named_steps["preprocess"].get_feature_names_out()
+        ).sort_values(ascending=False)
+        fig2, ax2 = plt.subplots(figsize=(8, 5))
+        importances.head(10)[::-1].plot.barh(ax=ax2, color="#4c72b0")
+        ax2.set_title("Feature importance — LightGBM")
+        plt.tight_layout(); plt.savefig(FIG / "ml_feature_importance.png", bbox_inches="tight")
 
-    joblib.dump(model, MODELS / "failure_model.joblib")
-    print(f"\nsaved model -> {MODELS / 'failure_model.joblib'}")
-    print("Milestone 5 complete.")
+        mlflow.log_artifact(FIG / "ml_evaluation.png")
+        mlflow.log_artifact(FIG / "ml_feature_importance.png")
+
+        mlflow.sklearn.log_model(model, name="model",
+                                 serialization_format="cloudpickle",  # skops rejects LightGBM types
+                                 registered_model_name="failure-predictor")
+        joblib.dump(model, MODELS / "failure_model.joblib")
+
+        print("=" * 60)
+        print(f"MLflow run: {run.info.run_id}  (model: {PARAMS['model']})")
+        print("=" * 60)
+        print(f"baseline (always 'no failure') accuracy: {dummy_acc*100:.2f}%  (catches 0 failures)")
+        print(f"model accuracy:  {metrics['test_accuracy']*100:.2f}%")
+        print(f"failure recall:  {metrics['failure_recall']:.3f}   (caught {cm[1,1]} of {cm[1].sum()})")
+        print(f"failure precision:{metrics['failure_precision']:.3f}")
+        print(f"PR-AUC:          {metrics['pr_auc']:.3f}")
+        print(f"ROC-AUC:         {metrics['roc_auc']:.3f}")
+        print("\nlogged to MLflow + registered model 'failure-predictor'.")
+        print("view:  mlflow ui --backend-store-uri sqlite:///mlflow.db")
 
 
 if __name__ == "__main__":

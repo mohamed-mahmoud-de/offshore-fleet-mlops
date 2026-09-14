@@ -24,6 +24,7 @@ data/processed/*
 # --- ML / experiment artifacts ---
 mlruns/
 mlartifacts/
+mlflow.db
 *.pkl
 *.joblib
 
