@@ -92,7 +92,7 @@ docker/
 - [x] **M6** MLflow experiment tracking + model registry
 - [x] **M7** Orchestration — Airflow-in-Docker DAG (ingest → features → scorecard → train, daily)
 - [x] **M8** Serving — Streamlit dashboard (scorecard + live failure-risk predictor)
-- [ ] **M9** Monitoring: data-quality + drift
+- [x] **M9** Monitoring — data-drift detection (KS test + Evidently reports) → retrain signal
 - [ ] **M10** Docker packaging + CI (GitHub Actions)
 
 ## Getting started
@@ -121,6 +121,9 @@ docker compose -f docker/airflow/docker-compose.yml up -d --build   # UI: http:/
 
 # 6. the serving dashboard (scorecard + failure-risk predictor)
 python -m streamlit run src/serving/dashboard.py                    # http://localhost:8501
+
+# 7. monitoring — data-drift check (writes HTML reports under reports/monitoring/)
+python -m src.monitoring.check_drift
 ```
 
 ## License / attribution

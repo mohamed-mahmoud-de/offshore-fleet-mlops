@@ -22,7 +22,8 @@ mlflow>=2.9              # experiment tracking + model registry
 streamlit>=1.30
 
 # Monitoring (Milestone 9)
-evidently>=0.4
+evidently>=0.7            # data drift + quality reports (M9)
+scipy>=1.10               # KS drift test (M9)
 
 # Testing
 pytest>=7.4

@@ -33,3 +33,6 @@ mlflow.db
 Thumbs.db
 .vscode/
 .idea/
+
+# Large regenerable monitoring reports (kept out of git)
+reports/monitoring/*.html
