@@ -1,0 +1,20 @@
+# Local PostgreSQL for the Maridive project — run with:
+#   docker compose -f docker/docker-compose.yml up -d
+# This gives you a real Postgres server with the `maridive` database already created,
+# no system install needed. Data persists in the named volume across restarts.
+services:
+  postgres:
+    image: postgres:16
+    container_name: maridive_pg
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: maridive_dev_pw   # local dev only — matches .env
+      POSTGRES_DB: maridive                # database is auto-created on first start
+    ports:
+      - "5432:5432"                        # host:container
+    volumes:
+      - maridive_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  maridive_pgdata:

@@ -1,0 +1,34 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# --- Virtual environment ---
+.venv/
+venv/
+env/
+
+# --- Secrets (NEVER commit real credentials) ---
+.env
+
+# --- Local-only notes (private meeting / personal context) ---
+PROJECT_NOTES.md
+
+# --- Data (don't commit datasets; keep the folder structure via .gitkeep) ---
+data/raw/*
+data/interim/*
+data/processed/*
+!data/**/.gitkeep
+
+# --- ML / experiment artifacts ---
+mlruns/
+mlartifacts/
+*.pkl
+*.joblib
+
+# --- OS / editor noise ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

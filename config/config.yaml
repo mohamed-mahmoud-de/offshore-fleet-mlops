@@ -1,0 +1,41 @@
+# Non-secret configuration. Anything private (passwords) lives in .env, NOT here.
+
+project:
+  name: maridive-fleet-performance
+  current_year: 2026          # used to compute vessel age
+
+paths:
+  raw_fleet: data/raw/maridive_fleet_synthetic.csv
+  raw_maintenance: data/raw/ai4i2020.csv
+  interim: data/interim
+  processed: data/processed
+
+database:
+  # connection secrets come from .env; this just names the tables we create
+  schema: public
+  tables:
+    fleet_raw: fleet_raw
+    fleet_features: fleet_features
+    scorecard: vessel_scorecard
+
+scorecard:
+  # VESSEL commercial score — "is this vessel earning its keep?" (utilization-heavy)
+  vessel_weights:
+    utilization: 0.40
+    on_time_completion: 0.25
+    safety: 0.20
+    downtime: 0.15
+  # CREW performance score — only what the crew can control (no utilization)
+  crew_weights:
+    on_time_completion: 0.50
+    safety: 0.30
+    downtime: 0.20
+  vessel_idle_override_pct: 15   # utilization below this -> vessel flag forced to red
+  low_activity_jobs: 8           # fewer completed missions -> mark the grade "low confidence"
+  references:            # absolute anchors for turning raw metrics into 0-100 scores
+    incident_zero_at: 5           # this many HSE incidents -> safety score of 0
+    downtime_zero_at_hours: 250   # this many downtime hours -> downtime score of 0
+  flag_thresholds:
+    green: 75            # score >= 75  -> good
+    amber: 55            # 55-74        -> watch
+    # below 55           -> red / needs attention
