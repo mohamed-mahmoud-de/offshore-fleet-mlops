@@ -1,0 +1,9 @@
+# Extra deps for our pipeline, installed WITH Airflow's constraints (see Dockerfile)
+# so they can NOT upgrade Airflow's own pinned core (e.g. SQLAlchemy) — doing so
+# breaks the metadata-DB migration. We only add what Airflow doesn't already ship.
+# mlflow is intentionally excluded (its deps conflict with Airflow); training runs
+# here with MLFLOW_ENABLED=0.
+pandas
+scikit-learn
+lightgbm
+python-dotenv

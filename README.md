@@ -75,8 +75,10 @@ src/
   ml/           model benchmark + shootout, train/evaluate (M5-M6)
   serving/      dashboard + API                           (M8)
   monitoring/   data-quality & drift checks              (M9)
-pipelines/      orchestration (scheduled runs)           (M7)
-docker/         docker-compose for local Postgres
+dags/           Airflow DAG — the scheduled pipeline      (M7)
+docker/
+  docker-compose.yml   local Postgres for the data
+  airflow/             Airflow (LocalExecutor) stack       (M7)
 ```
 
 ## Milestones
@@ -88,7 +90,7 @@ docker/         docker-compose for local Postgres
 - [x] **M4** Rules-based scorecard (crew + vessel grades)
 - [x] **M5** Failure-prediction model (LightGBM, selected via benchmark + shootout)
 - [x] **M6** MLflow experiment tracking + model registry
-- [ ] **M7** Orchestration (scheduled pipeline)
+- [x] **M7** Orchestration — Airflow-in-Docker DAG (ingest → features → scorecard → train, daily)
 - [ ] **M8** Serving: dashboard + automated report
 - [ ] **M9** Monitoring: data-quality + drift
 - [ ] **M10** Docker packaging + CI (GitHub Actions)
@@ -113,6 +115,9 @@ python -m src.ingestion.load_raw          # load raw -> Postgres + checks
 python -m src.features.build_features      # clean + engineer features
 python -m src.scorecard.build_scorecard    # build the scorecards
 python -m src.ml.train_model               # train + evaluate the model
+
+# 5. optional — run the whole pipeline on a schedule with Airflow
+docker compose -f docker/airflow/docker-compose.yml up -d --build   # UI: http://localhost:8080 (admin/admin)
 ```
 
 ## License / attribution
