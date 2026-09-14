@@ -91,7 +91,7 @@ docker/
 - [x] **M5** Failure-prediction model (LightGBM, selected via benchmark + shootout)
 - [x] **M6** MLflow experiment tracking + model registry
 - [x] **M7** Orchestration — Airflow-in-Docker DAG (ingest → features → scorecard → train, daily)
-- [ ] **M8** Serving: dashboard + automated report
+- [x] **M8** Serving — Streamlit dashboard (scorecard + live failure-risk predictor)
 - [ ] **M9** Monitoring: data-quality + drift
 - [ ] **M10** Docker packaging + CI (GitHub Actions)
 
@@ -118,6 +118,9 @@ python -m src.ml.train_model               # train + evaluate the model
 
 # 5. optional — run the whole pipeline on a schedule with Airflow
 docker compose -f docker/airflow/docker-compose.yml up -d --build   # UI: http://localhost:8080 (admin/admin)
+
+# 6. the serving dashboard (scorecard + failure-risk predictor)
+python -m streamlit run src/serving/dashboard.py                    # http://localhost:8501
 ```
 
 ## License / attribution
