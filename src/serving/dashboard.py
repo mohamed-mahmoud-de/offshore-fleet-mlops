@@ -80,20 +80,24 @@ def scorecard_view() -> None:
 
 def predictor_view() -> None:
     st.subheader("Equipment failure-risk predictor")
-    st.caption("Enter machine sensor readings — the LightGBM model estimates failure probability.")
+    st.caption("Set the machine sensor readings and click **Predict** — the LightGBM model estimates failure probability.")
     try:
         model = load_model()
     except Exception as e:
         st.error(f"Could not load the model ({MODEL_PATH.name}). Train it first. Details: {e}")
         return
 
-    c1, c2, c3 = st.columns(3)
-    ptype = c1.selectbox("Product type", ["L", "M", "H"], index=0)
-    air = c1.number_input("Air temperature (K)", 295.0, 305.0, 300.0, 0.1)
-    proc = c2.number_input("Process temperature (K)", 305.0, 314.0, 310.0, 0.1)
-    rpm = c2.number_input("Rotational speed (rpm)", 1000, 3000, 1500, 10)
-    torque = c3.number_input("Torque (Nm)", 3.0, 80.0, 40.0, 0.5)
-    wear = c3.number_input("Tool wear (min)", 0, 260, 100, 1)
+    # A form batches the inputs so nothing recomputes until the button is clicked
+    # (avoids the per-field "Press Enter to apply" confusion).
+    with st.form("predictor"):
+        c1, c2, c3 = st.columns(3)
+        ptype = c1.selectbox("Product type", ["L", "M", "H"], index=0)
+        air = c1.number_input("Air temperature (K)", 295.0, 305.0, 300.0, 0.1)
+        proc = c2.number_input("Process temperature (K)", 305.0, 314.0, 310.0, 0.1)
+        rpm = c2.number_input("Rotational speed (rpm)", 1000, 3000, 1500, 10)
+        torque = c3.number_input("Torque (Nm)", 3.0, 80.0, 40.0, 0.5)
+        wear = c3.number_input("Tool wear (min)", 0, 260, 100, 1)
+        st.form_submit_button("🔎 Predict failure risk", type="primary", use_container_width=True)
 
     temp_diff = round(proc - air, 2)
     power = round(torque * rpm * 2 * np.pi / 60, 1)
