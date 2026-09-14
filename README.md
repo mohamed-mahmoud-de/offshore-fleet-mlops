@@ -1,5 +1,7 @@
 # Offshore Fleet MLOps — Performance Scorecard & Predictive Maintenance
 
+![CI](https://github.com/mohamed-mahmoud-de/offshore-fleet-mlops/actions/workflows/ci.yml/badge.svg)
+
 An end-to-end **MLOps portfolio project** for offshore marine / oil-support fleet
 operations, built the way it would run in production: **Data Engineering → Machine
 Learning → MLOps**, one milestone at a time.
@@ -93,7 +95,9 @@ docker/
 - [x] **M7** Orchestration — Airflow-in-Docker DAG (ingest → features → scorecard → train, daily)
 - [x] **M8** Serving — Streamlit dashboard (scorecard + live failure-risk predictor)
 - [x] **M9** Monitoring — data-drift detection (KS test + Evidently reports) → retrain signal
-- [ ] **M10** Docker packaging + CI (GitHub Actions)
+- [x] **M10** Docker packaging + CI (GitHub Actions) + champion-challenger promotion
+
+**✅ Project complete — all 10 milestones.**
 
 ## Getting started
 
@@ -124,6 +128,13 @@ python -m streamlit run src/serving/dashboard.py                    # http://loc
 
 # 7. monitoring — data-drift check (writes HTML reports under reports/monitoring/)
 python -m src.monitoring.check_drift
+
+# 8. champion-challenger — retrain and promote ONLY if the new model is better
+python -m src.ml.promote_model
+
+# 9. package the app as a container (dashboard + pipeline)
+docker build -t offshore-fleet-app .
+docker run --rm -p 8501:8501 --env-file .env -e POSTGRES_HOST=host.docker.internal offshore-fleet-app
 ```
 
 ## License / attribution

@@ -1,0 +1,12 @@
+# Lean dependency set for CI (fast install; the smoke tests need no heavy tools
+# like mlflow / evidently / streamlit — those imports are guarded or lazy).
+pandas
+numpy
+scikit-learn
+lightgbm
+scipy
+sqlalchemy
+psycopg2-binary
+python-dotenv
+pyyaml
+pytest

@@ -22,9 +22,6 @@ from pathlib import Path
 import pandas as pd
 from scipy.stats import ks_2samp
 
-from evidently import Report
-from evidently.presets import DataDriftPreset, DataSummaryPreset
-
 from src.db import get_engine
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -48,6 +45,9 @@ def ks_drift(reference: pd.DataFrame, current: pd.DataFrame, alpha: float = 0.05
 
 
 def evidently_report(reference: pd.DataFrame, current: pd.DataFrame, path: Path) -> None:
+    from evidently import Report  # heavy import, kept lazy so tests/CI don't need it
+    from evidently.presets import DataDriftPreset, DataSummaryPreset
+
     report = Report([DataDriftPreset(), DataSummaryPreset()])
     snapshot = report.run(current_data=current, reference_data=reference)
     snapshot.save_html(str(path))

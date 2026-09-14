@@ -1,0 +1,13 @@
+# Runtime deps for the packaged app image (pipeline + Streamlit dashboard).
+# Excludes dev/experiment tooling (mlflow, evidently, jupyter, xgboost, lazypredict):
+# the container runs training with MLFLOW_ENABLED=0 and serves the dashboard.
+pandas
+numpy
+scikit-learn
+lightgbm
+scipy
+sqlalchemy
+psycopg2-binary
+python-dotenv
+pyyaml
+streamlit
